@@ -1,6 +1,14 @@
-# Autodesk Uninstaller - Modular Edition
-
-A comprehensive PowerShell-based GUI application for uninstalling Autodesk products with selective cleanup capabilities.
+<div align="center">
+  <img src="icon.png" alt="Autodesk Uninstaller Icon" width="128" height="128">
+  
+  # Autodesk Uninstaller - Modular Edition
+  
+  [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
+  [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/en-us/windows)
+  [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+  
+  **A comprehensive PowerShell-based GUI application for uninstalling Autodesk products with selective cleanup capabilities.**
+</div>
 
 ## Features
 
@@ -36,6 +44,7 @@ AutodeskUninstaller/
 ├── Main.ps1                        # Main entry point
 ├── AutodeskUninstaller.psd1         # Module manifest
 ├── AutodeskUninstaller.psm1         # Module entry point
+├── icon.png                         # Project icon
 ├── README.md                        # This file
 └── Modules/
     ├── Config.psm1                  # Configuration and globals
