@@ -88,7 +88,7 @@ AutodeskUninstaller/
 - Civil 3D
 - Fusion 360
 - Desktop Connector
-- Other Autodesk products
+- Other Autodesk products...
 
 ## Logging
 
