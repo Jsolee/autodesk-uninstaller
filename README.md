@@ -1,7 +1,7 @@
 <div align="center">
   <img src="icon.png" alt="Autodesk Uninstaller Icon" width="128" height="128">
   
-  # Autodesk Uninstaller - Modular Edition
+  # Autodesk Uninstaller
   
   [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
   [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/en-us/windows)
