@@ -187,6 +187,14 @@ function Invoke-UninstallationProcess {
         Clear-ProductData -ProductType $type -PreserveAddIns ($uninstallMode -eq 'Reinstall')
     }
     
+    # Perform additional system cleanup to prevent reinstallation issues
+    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Performing deep system cleanup..." -PercentComplete 95
+    Clear-AutodeskSystemRemnants
+    
+    # Run system maintenance to fix any registry or file system issues
+    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Running system maintenance..." -PercentComplete 98
+    Invoke-SystemMaintenance
+    
     Close-ProgressWindow
     
     return @{
@@ -279,3 +287,5 @@ function Main {
 
 # Run main function
 Main
+
+

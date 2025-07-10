@@ -20,11 +20,43 @@ $script:ProgressBar = $null
 $script:Config = @{
     LogRootPath = "C:\Temp\AutodeskUninstaller"
     AddInsBackupRootPath = "C:\Temp\AutodeskAddInsBackup"
-    AutodeskServices = @('GenuineService', 'AdskLicensingService', 'AdAppMgrSvc', 'FNPLicensingService')
-    AutodeskProcesses = @('message_router', 'GenuineService', 'AdSSO', 'AdskAccessServiceHost')
+    AutodeskServices = @('GenuineService', 'AdskLicensingService', 'AdAppMgrSvc', 'FNPLicensingService', 'AdskIdentityManager', 'Autodesk Content Service')
+    AutodeskProcesses = @('message_router', 'GenuineService', 'AdSSO', 'AdskAccessServiceHost', 'AdskIdentityManager', 'Autodesk Desktop App', 'adlmint.exe', 'adlmact.exe')
     RegistryHives = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
         'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )
+    # Additional registry paths that often cause reinstallation issues
+    RegistryCleanupPaths = @(
+        'HKLM:\SOFTWARE\Autodesk',
+        'HKLM:\SOFTWARE\Wow6432Node\Autodesk',
+        'HKCU:\SOFTWARE\Autodesk',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\AdskLicensingService',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\GenuineService',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\AdAppMgrSvc',
+        'HKLM:\SYSTEM\CurrentControlSet\Services\FNPLicensingService',
+        'HKLM:\SOFTWARE\FLEXlm License Manager',
+        'HKLM:\SOFTWARE\Wow6432Node\FLEXlm License Manager'
+    )
+    # Licensing-specific cleanup paths
+    LicensingCleanupPaths = @(
+        'C:\ProgramData\Autodesk\ADLM',
+        'C:\ProgramData\Autodesk\CLM',
+        'C:\ProgramData\FLEXnet',
+        'C:\Program Files\Common Files\Autodesk Shared\AdLM',
+        'C:\Program Files (x86)\Common Files\Autodesk Shared\AdLM',
+        'C:\Program Files\Common Files\Macrovision Shared\FLEXnet Publisher',
+        'C:\Program Files (x86)\Common Files\Macrovision Shared\FLEXnet Publisher'
+    )
+    # System paths that may contain Autodesk remnants
+    SystemCleanupPaths = @(
+        'C:\ProgramData\Autodesk',
+        'C:\Program Files\Common Files\Autodesk*',
+        'C:\Program Files (x86)\Common Files\Autodesk*',
+        'C:\Windows\Installer\*.msi',
+        'C:\Windows\System32\*.adlm*',
+        'C:\Windows\SysWOW64\*.adlm*'
     )
     ProductPaths = @{
         'Revit' = @(
