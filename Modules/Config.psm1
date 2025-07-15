@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
-    Configuration module for Autodesk Uninstaller
+    Optimized configuration module for Autodesk Uninstaller
 .DESCRIPTION
-    Contains global variables and configuration settings
+    Contains global variables and configuration settings optimized for
+    fast, error-free uninstallation and reinstallation
 #>
 
 # Global variables
@@ -20,84 +21,142 @@ $script:ProgressBar = $null
 $script:Config = @{
     LogRootPath = "C:\Temp\AutodeskUninstaller"
     AddInsBackupRootPath = "C:\Temp\AutodeskAddInsBackup"
-    AutodeskServices = @('GenuineService', 'AdskLicensingService', 'AdAppMgrSvc', 'FNPLicensingService', 'AdskIdentityManager', 'Autodesk Content Service')
-    AutodeskProcesses = @('message_router', 'GenuineService', 'AdSSO', 'AdskAccessServiceHost', 'AdskIdentityManager', 'Autodesk Desktop App', 'adlmint.exe', 'adlmact.exe')
+    
+    # Services - only stop/disable those that are truly product-specific
+    AutodeskServices = @(
+        'AdAppMgrSvc',           # Autodesk Application Manager
+        'AdskLicensingService',  # Autodesk Licensing Service
+        'Autodesk Content Service' # Content service
+        # Removed: GenuineService, FNPLicensingService - these are shared
+    )
+    
+    # Processes - only kill those that block uninstallation
+    AutodeskProcesses = @(
+        'AdAppMgrSvc',
+        'AdskAccessServiceHost', 
+        'Autodesk Desktop App',
+        'AdskIdentityManager',
+        'message_router'
+        # Removed: licensing processes that might be used by other software
+    )
+    
+    # Registry hives for product detection
     RegistryHives = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
         'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
     )
-    # Additional registry paths that often cause reinstallation issues
-    RegistryCleanupPaths = @(
-        'HKLM:\SOFTWARE\Autodesk',
-        'HKLM:\SOFTWARE\Wow6432Node\Autodesk',
-        'HKCU:\SOFTWARE\Autodesk',
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\AdskLicensingService',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\GenuineService',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\AdAppMgrSvc',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\FNPLicensingService',
-        'HKLM:\SOFTWARE\FLEXlm License Manager',
-        'HKLM:\SOFTWARE\Wow6432Node\FLEXlm License Manager'
-    )
-    # Licensing-specific cleanup paths
-    LicensingCleanupPaths = @(
-        'C:\ProgramData\Autodesk\ADLM',
-        'C:\ProgramData\Autodesk\CLM',
-        'C:\ProgramData\FLEXnet',
-        'C:\Program Files\Common Files\Autodesk Shared\AdLM',
-        'C:\Program Files (x86)\Common Files\Autodesk Shared\AdLM',
-        'C:\Program Files\Common Files\Macrovision Shared\FLEXnet Publisher',
-        'C:\Program Files (x86)\Common Files\Macrovision Shared\FLEXnet Publisher'
-    )
-    # System paths that may contain Autodesk remnants
-    SystemCleanupPaths = @(
-        'C:\ProgramData\Autodesk',
-        'C:\Program Files\Common Files\Autodesk*',
-        'C:\Program Files (x86)\Common Files\Autodesk*',
-        'C:\Windows\Installer\*.msi',
-        'C:\Windows\System32\*.adlm*',
-        'C:\Windows\SysWOW64\*.adlm*'
-    )
+    
+    # Product-specific paths only (not shared components)
     ProductPaths = @{
         'Revit' = @(
-            'C:\Program Files\Autodesk\Revit*',
-            'C:\ProgramData\Autodesk\RVT*',
-            'C:\Program Files\NREL\OpenStudio CLI For Revit*'
+            'C:\Program Files\Autodesk\Revit 20*',  # Version-specific
+            'C:\ProgramData\Autodesk\RVT 20*'       # Version-specific data
         )
         'AutoCAD' = @(
-            'C:\Program Files\Autodesk\AutoCAD*',
-            'C:\ProgramData\Autodesk\AutoCAD*'
+            'C:\Program Files\Autodesk\AutoCAD 20*',
+            'C:\ProgramData\Autodesk\AutoCAD 20*'
         )
         '3dsMax' = @(
-            'C:\Program Files\Autodesk\3ds Max*',
-            'C:\ProgramData\Autodesk\3dsMax*'
+            'C:\Program Files\Autodesk\3ds Max 20*',
+            'C:\ProgramData\Autodesk\3dsMax 20*'
+        )
+        'Maya' = @(
+            'C:\Program Files\Autodesk\Maya20*',
+            'C:\ProgramData\Autodesk\Maya20*'
+        )
+        'Inventor' = @(
+            'C:\Program Files\Autodesk\Inventor 20*',
+            'C:\ProgramData\Autodesk\Inventor 20*'
         )
         'DesktopConnector' = @(
-            'C:\Program Files\Autodesk\Desktop Connector',
-            'C:\ProgramData\Autodesk\Desktop Connector'
+            'C:\Program Files\Autodesk\Desktop Connector'
+        )
+        'Navisworks' = @(
+            'C:\Program Files\Autodesk\Navisworks * 20*',
+            'C:\ProgramData\Autodesk\Navisworks * 20*'
+        )
+        'Civil3D' = @(
+            'C:\Program Files\Autodesk\AutoCAD 20*',  # Civil 3D is AutoCAD-based
+            'C:\ProgramData\Autodesk\C3D 20*'
+        )
+        'Fusion' = @(
+            "$env:LOCALAPPDATA\Autodesk\webdeploy\production\*fusion*"
         )
     }
+    
+    # Add-in paths - comprehensive list for proper backup
     AddInPaths = @{
         'Revit' = @(
             @{ Path = '\Autodesk\Revit\Addins'; Pattern = '*' },
-            @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*Revit*' }
+            @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*Revit*' },
+            @{ Path = '\ModPlus\Revit'; Pattern = '*' },
+            @{ Path = '\Autodesk\Revit\Macros'; Pattern = '*' }
         )
         'AutoCAD' = @(
-            @{ Path = '\Autodesk\AutoCAD\*\Support'; Pattern = '*' },
-            @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*AutoCAD*' }
+            @{ Path = '\Autodesk\AutoCAD\R*\enu\Support'; Pattern = '*' },
+            @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*AutoCAD*' },
+            @{ Path = '\Autodesk\AutoCAD\R*\enu\Express'; Pattern = '*' }
         )
         '3dsMax' = @(
-            @{ Path = '\Autodesk\3dsMax\*\plugins'; Pattern = '*' },
+            @{ Path = '\Autodesk\3dsMax\20*\plugins'; Pattern = '*' },
+            @{ Path = '\Autodesk\3dsMax\20*\scripts'; Pattern = '*' },
             @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*3dsMax*' }
         )
+        'Maya' = @(
+            @{ Path = '\Autodesk\maya\20*\scripts'; Pattern = '*' },
+            @{ Path = '\Autodesk\maya\20*\plug-ins'; Pattern = '*' },
+            @{ Path = '\Autodesk\ApplicationPlugins'; Pattern = '*Maya*' }
+        )
     }
+    
+    # Paths to preserve during cleanup
     PreservePaths = @(
+        # Add-in and plugin directories
         '*\Addins\*',
         '*\ApplicationPlugins\*',
         '*\plugins\*',
+        '*\plug-ins\*',
+        '*\scripts\*',
+        '*\Macros\*',
+        '*\Express\*',
+        # Support files
         '*\Support\*.lsp',
         '*\Support\*.fas',
-        '*\Support\*.vlx'
+        '*\Support\*.vlx',
+        '*\Support\*.cui*',
+        '*\Support\*.mnl',
+        '*\Support\*.pat',
+        '*\Support\*.lin',
+        '*\Support\*.shx',
+        '*\Support\*.ctb',
+        '*\Support\*.stb',
+        '*\Support\*.pc3',
+        '*\Support\*.pmp',
+        # User configurations
+        '*\*.arg',
+        '*\user.config',
+        '*\Settings\*.xml'
+    )
+    
+    # Minimal set of registry cleanup paths (product-specific only)
+    RegistryCleanupPaths = @(
+        'HKLM:\SOFTWARE\Autodesk\UPI2',
+        'HKLM:\SOFTWARE\Wow6432Node\Autodesk\UPI2',
+        'HKCU:\SOFTWARE\Autodesk\UPI2'
+        # Removed shared licensing and system paths
+    )
+    
+    # Shared components to never delete
+    SharedComponents = @(
+        '*\Common Files\*',
+        '*\Shared\*',
+        '*\System\*',
+        '*\Framework\*',
+        '*\Runtime\*',
+        '*\Redistributable\*',
+        '*\Library\*',
+        '*FLEXnet*',
+        '*\Microsoft*'
     )
 }
 

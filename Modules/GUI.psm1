@@ -49,11 +49,17 @@ function Show-ProductSelectionGUI {
         $selectedProducts = @()
         foreach ($item in $listView.Items) {
             if ($item.Checked) {
-                $selectedProducts += $item.Tag
+                $mainProduct = $item.Tag
+                # Expand main product into its components for uninstallation
+                if ($mainProduct.Components) {
+                    $selectedProducts += $mainProduct.Components
+                } else {
+                    $selectedProducts += $mainProduct
+                }
             }
         }
         
-        $uninstallMode = if ($fullUninstallRadio.Checked) { 'Full' } else { 'Reinstall' }
+        $uninstallMode = if ($fullUninstallRadio.Checked) { 'Complete' } else { 'Reinstall' }
         
         Set-SelectedProducts -value $selectedProducts
         Set-UninstallMode -value $uninstallMode
@@ -159,10 +165,15 @@ function New-ProductListPanel {
         $column.TextAlign = 'Left'
     }
     
-    # Populate ListView with alternating row colors
+    # Populate ListView with main products
     $rowIndex = 0
     foreach ($product in $Products) {
-        $item = New-Object System.Windows.Forms.ListViewItem($product.DisplayName)
+        $displayName = $product.DisplayName
+        if ($product.ComponentCount -gt 1) {
+            $displayName += " ($($product.ComponentCount) components)"
+        }
+        
+        $item = New-Object System.Windows.Forms.ListViewItem($displayName)
         [void]$item.SubItems.Add($product.DisplayVersion)
         [void]$item.SubItems.Add($product.ProductType)
         $item.Tag = $product
@@ -249,7 +260,7 @@ function New-ModeSelectionPanel {
     $fullUninstallRadio.FlatStyle = 'Flat'
     
     $reinstallRadio = New-Object System.Windows.Forms.RadioButton
-    $reinstallRadio.Text = "Reinstall preparation - Preserve add-ins and user settings for later use"
+    $reinstallRadio.Text = "Reinstall preparation - Preserve licensing, add-ins, and shared components"
     $reinstallRadio.Font = New-Object System.Drawing.Font("Segoe UI", 10)
     $reinstallRadio.Location = New-Object System.Drawing.Point(10, 30)
     $reinstallRadio.Size = New-Object System.Drawing.Size(580, 25)
@@ -428,7 +439,9 @@ function Show-ConfirmationDialog {
     $confirmForm.Controls.Add($confirmTitle)
     
     # Message
-    $message = "You are about to uninstall $($selectedProducts.Count) product(s)`n`n"
+    $selectedProducts = @(Get-SelectedProducts)
+    $productCount = $selectedProducts.Count
+    $message = "You are about to uninstall $productCount product(s)`n`n"
     $message += "Mode: $uninstallMode uninstall`n`n"
     
     $messageLabel = New-Object System.Windows.Forms.Label

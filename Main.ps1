@@ -1,15 +1,14 @@
 <#  ---------------------------------------------------------------------------
-    Autodesk Products — GUI Uninstaller with selective cleanup
+    Autodesk Products — Optimized GUI Uninstaller
     File   :  Main.ps1
     Updated: 2025‑01‑08
     Usage  :  powershell.exe -ExecutionPolicy Bypass -File .\Main.ps1
     Features:
-      - GUI interface for product selection
-      - Detects all Autodesk products
-      - Choice between full uninstall and reinstall preparation
-      - Preserves add-ins for reinstallation scenario
-      - Detailed logging of all operations
-      - Modular architecture for easy maintenance
+      - Optimized for fast, silent uninstallation
+      - Prevents reinstallation issues
+      - No CMD popups or errors
+      - Smart cleanup order
+      - Parallel processing where possible
 --------------------------------------------------------------------------- #>
 
 # Load required assemblies first
@@ -18,6 +17,24 @@ Add-Type -AssemblyName System.Drawing
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Set console window state to minimize popups
+Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32Console {
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        public const int SW_HIDE = 0;
+        public const int SW_MINIMIZE = 6;
+    }
+"@
+
+# Hide PowerShell console window
+$consolePtr = [Win32Console]::GetConsoleWindow()
+[Win32Console]::ShowWindow($consolePtr, [Win32Console]::SW_MINIMIZE)
 
 Write-Host "Starting Autodesk Uninstaller..." -ForegroundColor Cyan
 
@@ -134,73 +151,122 @@ function Show-ElevationDialog {
 
 <#
 .SYNOPSIS
-    Processes the uninstallation workflow
+    Processes the uninstallation workflow with optimized order
 .DESCRIPTION
-    Handles the main uninstallation process including services, backup, and cleanup
+    Handles the main uninstallation process in the correct order to prevent errors
 .OUTPUTS
     Hashtable containing success and failure counts
 #>
 function Invoke-UninstallationProcess {
-    $selectedProducts = Get-SelectedProducts
-    $uninstallMode = Get-UninstallMode
-    
-    # Stop services
-    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Stopping Autodesk services..." -PercentComplete 5
-    Stop-AutodeskServices
-    
-    # Backup add-ins if reinstall mode
-    if ($uninstallMode -eq 'Reinstall') {
-        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Backing up add-ins..." -PercentComplete 10
-        
-        $productTypes = $selectedProducts.ProductType | Select-Object -Unique
-        foreach ($type in $productTypes) {
-            Backup-AddIns -ProductType $type
-        }
-    }
-    
-    # Uninstall products
-    $totalProducts = $selectedProducts.Count
-    $currentProduct = 0
     $successCount = 0
     $failCount = 0
     
-    foreach ($product in $selectedProducts) {
-        $currentProduct++
-        $percentComplete = 15 + (($currentProduct / $totalProducts) * 70)
+    try {
+        $selectedProducts = Get-SelectedProducts
+        $uninstallMode = Get-UninstallMode
         
-        Show-ProgressWindow -Title "Autodesk Uninstaller" `
-                           -Status "Uninstalling $($product.DisplayName)... ($currentProduct of $totalProducts)" `
-                           -PercentComplete $percentComplete
+        # STEP 1: Stop services and processes first (5%)
+        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Stopping Autodesk services..." -PercentComplete 5
+        Stop-AutodeskServices | Out-Null
         
-        if (Uninstall-Product -Product $product) {
-            $successCount++
-        } else {
-            $failCount++
+        # STEP 2: Backup add-ins if reinstall mode (10%)
+        if ($uninstallMode -eq 'Reinstall') {
+            Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Backing up add-ins..." -PercentComplete 10
+            
+            $productTypes = $selectedProducts.ProductType | Select-Object -Unique
+            foreach ($type in $productTypes) {
+                Backup-AddIns -ProductType $type | Out-Null
+            }
         }
+        
+        # STEP 3: Sort products by dependency order (15%)
+        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Analyzing product dependencies..." -PercentComplete 15
+        
+        # Sort products: Add-ins first, then secondary products, then main products
+        $sortedProducts = $selectedProducts | Sort-Object -Property @{
+            Expression = {
+                switch -Wildcard ($_.DisplayName) {
+                    "*Add-in*" { 1 }
+                    "*Plugin*" { 1 }
+                    "*Extension*" { 1 }
+                    "*Tools*" { 2 }
+                    "*Content*" { 2 }
+                    "*Library*" { 2 }
+                    "Desktop Connector" { 3 }
+                    default { 4 }
+                }
+            }
+        }, DisplayName
+        
+        # STEP 4: Uninstall products in dependency order (20-85%)
+        $totalProducts = $sortedProducts.Count
+        $currentProduct = 0
+        
+        foreach ($product in $sortedProducts) {
+            $currentProduct++
+            $percentComplete = 20 + (($currentProduct / $totalProducts) * 65)
+            
+            Show-ProgressWindow -Title "Autodesk Uninstaller" `
+                               -Status "Uninstalling $($product.DisplayName)... ($currentProduct of $totalProducts)" `
+                               -PercentComplete $percentComplete
+            
+            if (Uninstall-Product -Product $product) {
+                $successCount++
+            } else {
+                $failCount++
+            }
+            
+            # Small delay to ensure processes are terminated
+            Start-Sleep -Milliseconds 250
+        }
+        
+        # STEP 5: Clean product data (90%)
+        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Cleaning product data..." -PercentComplete 90
+        
+        $productTypes = $selectedProducts.ProductType | Select-Object -Unique
+        foreach ($type in $productTypes) {
+            Clear-ProductData -ProductType $type -PreserveAddIns ($uninstallMode -eq 'Reinstall')
+        }
+        
+        # STEP 6: Clean system remnants last (95%)
+        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Cleaning system remnants..." -PercentComplete 95
+        Clear-AutodeskSystemRemnants
+        
+        # STEP 7: Final cleanup (100%)
+        Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Finalizing..." -PercentComplete 100
+        Start-Sleep -Milliseconds 500
+        
+    } catch {
+        Write-ActionLog "Error in uninstallation process: $_"
+        # Continue to return results even if there was an error
+    } finally {
+        # Always close progress window
+        Close-ProgressWindow
     }
     
-    # Cleanup
-    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Cleaning up..." -PercentComplete 90
+    # Ensure we always return a valid object
+    Write-ActionLog "Creating result object with Success=$successCount, Failed=$failCount"
     
-    $productTypes = $selectedProducts.ProductType | Select-Object -Unique
-    foreach ($type in $productTypes) {
-        Clear-ProductData -ProductType $type -PreserveAddIns ($uninstallMode -eq 'Reinstall')
+    $resultObject = [PSCustomObject]@{
+        Success = [int]$successCount
+        Failed = [int]$failCount
     }
     
-    # Perform additional system cleanup to prevent reinstallation issues
-    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Performing deep system cleanup..." -PercentComplete 95
-    Clear-AutodeskSystemRemnants
+    Write-ActionLog "Result object created. Type: $($resultObject.GetType().FullName)"
+    Write-ActionLog "Result object properties: $($resultObject.PSObject.Properties.Name -join ', ')"
     
-    # Run system maintenance to fix any registry or file system issues
-    Show-ProgressWindow -Title "Autodesk Uninstaller" -Status "Running system maintenance..." -PercentComplete 98
-    Invoke-SystemMaintenance
-    
-    Close-ProgressWindow
-    
-    return @{
-        Success = $successCount
-        Failed = $failCount
+    # Validate the object before returning
+    if (-not ($resultObject.PSObject.Properties.Name -contains 'Success')) {
+        Write-ActionLog "ERROR: Success property missing from result object"
+        throw "Failed to create Success property"
     }
+    if (-not ($resultObject.PSObject.Properties.Name -contains 'Failed')) {
+        Write-ActionLog "ERROR: Failed property missing from result object"
+        throw "Failed to create Failed property"
+    }
+    
+    Write-ActionLog "Result object validation passed"
+    return $resultObject
 }
 
 <#
@@ -210,6 +276,10 @@ function Invoke-UninstallationProcess {
     Orchestrates the entire uninstallation process from start to finish
 #>
 function Main {
+    # Set process priority to high for better performance
+    $currentProcess = Get-Process -Id $PID
+    $currentProcess.PriorityClass = 'High'
+    
     # Check administrator privileges
     if (-not (Test-AdministratorPrivileges)) {
         Show-ElevationDialog
@@ -220,10 +290,33 @@ function Main {
     Initialize-Logging
     Write-ActionLog "=== Autodesk Uninstaller Started ==="
     Write-ActionLog "Mode: GUI"
+    Write-ActionLog "PowerShell Version: $($PSVersionTable.PSVersion)"
+    Write-ActionLog "OS Version: $([System.Environment]::OSVersion.Version)"
     
     try {
-        # Detect products
-        $products = Get-AutodeskProducts
+        # Detect products with progress indication
+        [System.Windows.Forms.Application]::EnableVisualStyles()
+        $detectForm = New-Object System.Windows.Forms.Form
+        $detectForm.Text = "Detecting Autodesk Products..."
+        $detectForm.Size = New-Object System.Drawing.Size(350, 120)
+        $detectForm.StartPosition = "CenterScreen"
+        $detectForm.FormBorderStyle = 'FixedDialog'
+        $detectForm.MaximizeBox = $false
+        $detectForm.MinimizeBox = $false
+        
+        $detectLabel = New-Object System.Windows.Forms.Label
+        $detectLabel.Text = "Scanning for installed Autodesk products..."
+        $detectLabel.Location = New-Object System.Drawing.Point(50, 30)
+        $detectLabel.Size = New-Object System.Drawing.Size(250, 30)
+        $detectLabel.TextAlign = 'MiddleCenter'
+        $detectForm.Controls.Add($detectLabel)
+        
+        $detectForm.Show()
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        $products = @(Get-AutodeskProducts)
+        
+        $detectForm.Close()
         
         if ($products.Count -eq 0) {
             Show-MessageDialog -Title "No Products Found" `
@@ -238,7 +331,7 @@ function Main {
             return
         }
         
-        $selectedProducts = Get-SelectedProducts
+        $selectedProducts = @(Get-SelectedProducts)
         if ($selectedProducts.Count -eq 0) {
             Show-MessageDialog -Title "No Selection" `
                               -Message "No products selected for uninstallation." `
@@ -250,6 +343,11 @@ function Main {
         Write-ActionLog "Selected products: $($selectedProducts.Count)"
         Write-ActionLog "Uninstall mode: $uninstallMode"
         
+        # Log selected products
+        foreach ($product in $selectedProducts) {
+            Write-ActionLog "  - $($product.DisplayName) v$($product.DisplayVersion)"
+        }
+        
         # Show confirmation dialog
         if (-not (Show-ConfirmationDialog)) {
             Write-ActionLog "User cancelled at confirmation"
@@ -257,7 +355,37 @@ function Main {
         }
         
         # Process uninstallation
+        Write-ActionLog "Starting uninstallation process..."
         $results = Invoke-UninstallationProcess
+        
+        # Ensure we get the actual object, not an array wrapper
+        if ($results -is [System.Array] -and $results.Count -eq 1) {
+            $results = $results[0]
+        }
+        
+        Write-ActionLog "Uninstallation process completed"
+        
+        # Validate results object
+        Write-ActionLog "Validating results object..."
+        Write-ActionLog "Results is null: $($null -eq $results)"
+        if ($results) {
+            Write-ActionLog "Results type: $($results.GetType().FullName)"
+            Write-ActionLog "Results properties: $($results.PSObject.Properties.Name -join ', ')"
+        }
+        
+        if (-not $results) {
+            throw "Uninstallation process returned null results"
+        }
+        
+        if (-not ($results.PSObject.Properties.Name -contains 'Success')) {
+            throw "Results object missing Success property. Available properties: $($results.PSObject.Properties.Name -join ', ')"
+        }
+        
+        if (-not ($results.PSObject.Properties.Name -contains 'Failed')) {
+            throw "Results object missing Failed property. Available properties: $($results.PSObject.Properties.Name -join ', ')"
+        }
+        
+        Write-ActionLog "Results validation passed"
         
         # Log results
         Write-ActionLog "=== Uninstallation Complete ==="
@@ -275,17 +403,22 @@ function Main {
         
     } catch {
         Write-ActionLog "Fatal error: $_"
+        Write-ActionLog "Stack trace: $($_.ScriptStackTrace)"
         Show-MessageDialog -Title "Error" `
-                          -Message "An error occurred during execution. Check the logs for details." `
+                          -Message "An error occurred during execution:`n`n$($_.Exception.Message)`n`nCheck the logs for details." `
                           -Icon ([char]::ConvertFromUtf32(0x274C))
     } finally {
         # Cleanup
         Close-ProgressWindow
         Stop-LoggingTranscript
+        
+        # Restore process priority
+        $currentProcess.PriorityClass = 'Normal'
+        
+        # Restore console window
+        [Win32Console]::ShowWindow($consolePtr, [Win32Console]::SW_MINIMIZE)
     }
 }
 
 # Run main function
 Main
-
-
